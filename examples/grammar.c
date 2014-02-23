@@ -50,6 +50,11 @@ class OutputGenerator
   virtual OutputObject emit() const {
     return OutputObject ();
   }
+
+  virtual OutputObject emit_ref() const {
+    return OutputObject ();
+  }
+
 };
 
 class None : public OutputGenerator {
@@ -69,13 +74,20 @@ class Ref : public OutputGenerator {
  Ref(OutputGenerator & r):
   ptr(&r) {}
 
-  // Ref(Ref r):ptr(r.ptr) {}
-  // Ref(const Ref r):ptr(r.ptr) {}
-
  public:
   virtual OutputObject emit() const {
     if (ptr) {
       return ptr->emit();
+    }
+    return OutputObject();
+  }
+
+  virtual OutputObject emit_ref() const {
+    /*
+      just delegate the method
+     */
+    if (ptr) {
+      return ptr->emit_ref();
     }
     return OutputObject();
   }
@@ -135,6 +147,8 @@ template <class T> class Rule2  : public OutputGenerator {
     func.emit();
     return OutputGenerator::emit();
   }
+
+
 };
 
 
@@ -171,24 +185,26 @@ template <class X, class Y>  class Or : public Pair<X,Y> {
  Or(X  a, Y b):  Pair<X,Y>(a,b) { }
 
   OutputObject emit() const {
-    Pair<X,Y>::a.emit();
+    Pair<X,Y>::a.emit_ref();
     std::cout << std::endl << "| " ;
-    Pair<X,Y>::b.emit();
+    Pair<X,Y>::b.emit_ref();
      return OutputGenerator::emit(); 
   }
 
 };
 
+/*
+  plus operator
+*/
 template <class X, class Y> 
   class Plus : public Pair<X,Y> {
  public :
  Plus(const X & a, const Y & b):  Pair<X,Y>(a,b)     {    }
 
-
   OutputObject emit() const {
-    Pair<X,Y>::a.emit();
+    Pair<X,Y>::a.emit_ref();
     std::cout << " ";
-    Pair<X,Y>::b.emit();
+    Pair<X,Y>::b.emit_ref();
     return OutputGenerator::emit(); 
   }
 
@@ -215,9 +231,7 @@ class TokenChar : public OutputGenerator {
  public:
   char v;
  TokenChar(char v): 
-   
-    v(v)  {
-    //emit();
+  v(v)  {
   }
   //  OutputGenerator operator ()() { return OutputGeneratorPtr(this); }
 
@@ -225,13 +239,10 @@ class TokenChar : public OutputGenerator {
   
     v(t.v)
       {
-        //emit();
       };
 
   virtual OutputObject emit() const {
     std::cout << "TOKENc('" << v << "')" << std::endl;
-    //  OutputGenerator::emit();
-    //std::cout  << v ;
     return OutputGenerator::emit();
   }
 
@@ -258,7 +269,12 @@ class RuleBase : public OutputGenerator {
   virtual const char * get_name() const =0;
   virtual Rule<Ref> parse () const =0;
 
-
+  virtual OutputObject emit_ref() const {
+    std::cout << "RULE(" << this->get_name() << "," << std::endl;
+    OutputObject o;
+    std::cout << ")" << std::endl;
+    return o;
+  }
   virtual OutputObject emit() const {
     std::cout << "RULE(" << this->get_name() << "," << std::endl;
     OutputObject o = this->parse().emit();
@@ -414,7 +430,6 @@ class BaseRule : public OutputGenerator {
  BaseRule(const char *name): name(name) {}
   virtual OutputObject emit() const{
     std::cout << "R:" << name << " ";
-
     return OutputGenerator::emit();
   }
 };
@@ -639,12 +654,17 @@ Rule<Ref>  _declaration::parse() const {
 }
 
 Rule<Ref>  _declaration_specifiers::parse() const {
-    return (storage_class_specifier)
-    | (storage_class_specifier + declaration_specifiers)
-    | (type_specifier)
-    | (type_specifier + declaration_specifiers)
-    | (type_qualifier)
+    return 
+         (storage_class_specifier)
+      | (type_specifier)
+      | (type_qualifier)
+      /*
+        this are a recursive definition
+        where you can have multiple definitions
+       */
       | (type_qualifier + declaration_specifiers)
+      | (type_specifier + declaration_specifiers)
+      | (storage_class_specifier + declaration_specifiers)
     ;
 }
 
@@ -939,15 +959,11 @@ Rule<Ref>  _function_definition::parse() const {
 
 
 int main() {
-  //translation_unit.parse().emit();
-
-  type_qualifier.emit();
-
-
-  /*  primary_expression.parse().emit();
-  assignment_expression.parse().emit();
-  conditional_expression.parse().emit();
-  logical_and_expression.parse().emit();
-  logical_or_expression.parse().emit();
-  */
+  translation_unit.parse().emit();
+  //  type_qualifier.emit();
+  //  primary_expression.parse().emit();
+  //  assignment_expression.parse().emit();
+  //  conditional_expression.parse().emit();
+  //  logical_and_expression.parse().emit();
+  //  logical_or_expression.parse().emit();
 }
