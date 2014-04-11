@@ -4,6 +4,17 @@
 
    This defines the c grammar in C++
    to use for language generation and test generation.
+
+Idea for generation of rules.
+
+1. be able to name each rule.
+the RULE macro names each of the rules.
+
+a list of the rules is created by constructing each rule object.
+2. be able to define each rule as a finite list of elements. they will have terminals and non terminals.
+3. be able to expand any non terminal at least once. 
+4. be able to detect loops.
+
 **/
 
 
@@ -17,25 +28,25 @@
  */
 #define TOKEN(X) Token X( #X );
 
-/*
-  entry point to declare a rule class
-*/
-#define RULE(X) class _ ## X \
-  : public RuleBase {			       \
-  public: \
-    virtual Rule<Ref> parse () const;             \
-    virtual const char * get_name() const { return #X;}         \
-  } X;
+class  BaseRule; // forward
 
-/*
+#include <map>
 
-*/
+class RuleDictionary {
+  /**
+     a dictiona
+   */
+ public:
+  typedef std::map<std::string, BaseRule*> t_map;
+  t_map dict;
+  void Add(BaseRule *);
+  void Report(){
+    for (t_map::iterator it=dict.begin(); it!=dict.end(); ++it) {
+      std::cout << it->first << " => " << it->second << '\n';
+    }
+  }
+} dict;
 
-
-/*
-  implement an instance of the rule
-*/
-#define RULE_INSTANCE(X) X( #X );
 
 class OutputObject {
  public:
@@ -57,6 +68,78 @@ class OutputGenerator
 
 };
 
+
+class BaseRule : public OutputGenerator {
+
+  /*
+    the name is defined in the macro for each rule.
+   */
+  const char * name;
+
+ public:
+  
+ BaseRule(const char *name): name(name) {
+    /*
+      here each rule is defined.
+     */
+    std::cout << "Declaring the rule " << name << std::endl;
+
+    // add this to the dictionary
+    dict.Add(this);
+  }
+
+ BaseRule() {
+    /*
+      here each rule is defined.
+    */
+   name = get_name();
+   std::cout << "Declaring the rule " << name << std::endl;
+
+    // add this to the dictionary
+    dict.Add(this);
+  }
+
+  virtual OutputObject emit() const{
+    std::cout << "R:" << name << " ";
+    return OutputGenerator::emit();
+  }
+
+  virtual const char * get_name() const{
+    return name;
+  }
+  
+  //virtual const char * get_name() const =0;
+  //
+  //virtual Rule<Ref> parse () const =0;
+
+  virtual OutputObject emit_ref() const { 
+    std::cout << "RULE(" << get_name() << "," << std::endl; 
+    OutputObject o; 
+    std::cout << ")" << std::endl; 
+    return o; 
+  }
+
+  /* virtual OutputObject emit() const { */
+  /*   std::cout << "RULE(" << this->get_name() << "," << std::endl; */
+  /*   OutputObject o = this->parse().emit(); */
+  /*   std::cout << ")" << std::endl; */
+  /*   return o; */
+  /* } */
+
+};
+
+/*
+  entry point to declare a rule class
+*/
+
+
+
+/*
+  implement an instance of the rule
+*/
+#define RULE_INSTANCE(X) X( #X );
+
+
 class None : public OutputGenerator {
   virtual OutputObject emit() const {
     std::cout << "NONE" << std::endl;
@@ -67,6 +150,9 @@ class None : public OutputGenerator {
 typedef std::tr1::shared_ptr<OutputGenerator> OutputGeneratorPtr;
 
 class Ref : public OutputGenerator {
+  /**
+     ref is returned
+   */
  protected:
   OutputGeneratorPtr ptr;
  public:
@@ -81,7 +167,6 @@ class Ref : public OutputGenerator {
     }
     return OutputObject();
   }
-
   virtual OutputObject emit_ref() const {
     /*
       just delegate the method
@@ -105,50 +190,16 @@ class Pair2 : public OutputGenerator {
 };
 
 
-/*
-  The Rule<Ref> is the return of the parse method.
-  parse is implemented to create a grammar rule.
-*/
-template <class T> 
-class Rule : public OutputGenerator {
-  T r;
- public:
- Rule(T r) : r(r){};
-
- template <class U> Rule(U r) : r(r){};
-
-  virtual OutputObject emit() const {
-    std::cout << "DEF(" << std::endl;
-    r.emit();
-    std::cout << ")" << std::endl;
-    return OutputGenerator::emit();
-  }
-};
-
-class Foo {
- public:
-  Foo(const char * ) {}
-
-virtual OutputObject emit() const {
-    std::cout << "FOO:" << std::endl;
-    return OutputObject();
-}
-  
-};
-
 template <class T> class Rule2  : public OutputGenerator {
   T func;
   const char * name;
  public:
- Rule2(const char * name , T func) : func(func), name(name) { }
-  
+ Rule2(const char * name , T func) : func(func), name(name) { }  
   virtual OutputObject emit() const {
     std::cout << "R:" << name << std::endl;
     func.emit();
     return OutputGenerator::emit();
   }
-
-
 };
 
 
@@ -263,26 +314,7 @@ template <class X, class Y>  Ref operator | (X a, Y b) {
   return Ref(obj);
 }
 
-class RuleBase : public OutputGenerator {
- public:
 
-  virtual const char * get_name() const =0;
-  virtual Rule<Ref> parse () const =0;
-
-  virtual OutputObject emit_ref() const {
-    std::cout << "RULE(" << this->get_name() << "," << std::endl;
-    OutputObject o;
-    std::cout << ")" << std::endl;
-    return o;
-  }
-  virtual OutputObject emit() const {
-    std::cout << "RULE(" << this->get_name() << "," << std::endl;
-    OutputObject o = this->parse().emit();
-    std::cout << ")" << std::endl;
-    return o;
-  }
-
-};
 
 TOKEN(ADD_ASSIGN)
 TOKEN(AND_ASSIGN)
@@ -343,6 +375,25 @@ TOKEN(VOLATILE)
 TOKEN(WHILE)
 TOKEN(XOR_ASSIGN)
 
+void RuleDictionary::Add(BaseRule * r){
+  dict[r->get_name()] = r;
+}
+
+template <class T> class Rule : public BaseRule{
+ public:
+  Rule(T){};
+  Rule(const char * pname) : BaseRule(pname){};
+  Rule(Rule<T>&){};
+Rule(const Rule<T>&){};
+};
+
+#define RULE(X) class _ ## X                            \
+  : public BaseRule {                                   \
+public:                                                 \
+    _ ## X(): BaseRule( #X ) {}                         \
+    virtual const char * get_name()  { return #X;}      \
+    virtual Rule<Ref> parse() const;                          \
+  } X;
 
 RULE(abstract_declarator)
 RULE(additive_expression)
@@ -424,19 +475,9 @@ TokenChar TOKEN_COLON(':');
 TokenChar TOKEN_QUESTION('?');
 TokenChar TOKEN_COMMA(',');
 
-class BaseRule : public OutputGenerator {
-  const char * name;
+class BaseExpression : public Rule<Ref> {
  public:
- BaseRule(const char *name): name(name) {}
-  virtual OutputObject emit() const{
-    std::cout << "R:" << name << " ";
-    return OutputGenerator::emit();
-  }
-};
-
-class BaseExpression : public BaseRule {
- public:
- BaseExpression(const char *name): BaseRule(name) {}
+ BaseExpression(const char *name): Rule<Ref>(name) {}
 };
 
 class Expression : public BaseExpression {
@@ -454,7 +495,7 @@ class LogicalExpression : public BaseExpression {
 class LogicalAndExpression : public LogicalExpression {
  public:
  LogicalAndExpression(const char *name): LogicalExpression(name) {}
-Rule<Ref> parse();
+  Rule<Ref> parse();
 } RULE_INSTANCE(logical_and_expression);
 
 // -----------------------------------------------------------
@@ -463,6 +504,8 @@ class LogicalOrExpression : public LogicalExpression {
  LogicalOrExpression(const char *name): LogicalExpression(name) {}
   Rule<Ref> parse();
 } RULE_INSTANCE(logical_or_expression);
+
+
 
 Rule<Ref> LogicalOrExpression::parse() {
   return logical_and_expression
@@ -959,11 +1002,12 @@ Rule<Ref>  _function_definition::parse() const {
 
 
 int main() {
-  translation_unit.parse().emit();
+  //translation_unit.parse().emit();
   //  type_qualifier.emit();
   //  primary_expression.parse().emit();
   //  assignment_expression.parse().emit();
   //  conditional_expression.parse().emit();
   //  logical_and_expression.parse().emit();
   //  logical_or_expression.parse().emit();
+  dict.Report();
 }
